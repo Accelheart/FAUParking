@@ -8,14 +8,18 @@
 import SwiftUI
 
 struct MainTabView: View {
+    @StateObject private var spotsViewModel = SpotsViewModel()
+
     var body: some View {
         TabView {
             DashboardView()
+                .environmentObject(spotsViewModel)
                 .tabItem {
                     Label("Dashboard", systemImage: "dot.radiowaves.left.and.right")
                 }
 
-            SpotsListView(spots: MockData.spots)
+            SpotsListView()
+                .environmentObject(spotsViewModel)
                 .tabItem {
                     Label("Spots", systemImage: "parkingsign.circle")
                 }
@@ -29,6 +33,9 @@ struct MainTabView: View {
                 .tabItem {
                     Label("Alerts", systemImage: "exclamationmark.triangle")
                 }
+        }
+        .task {
+            await spotsViewModel.load()
         }
     }
 }

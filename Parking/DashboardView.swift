@@ -5,22 +5,13 @@
 //  Created by Khalid Abdallah on 11/24/25.
 //
 
-import Foundation
 import SwiftUI
 
 struct DashboardView: View {
-    // In a real app these would be @StateObject view models
-    let spots = MockData.spots
-    let drones = MockData.drones
-    let alerts = MockData.alerts
+    @EnvironmentObject var spotsViewModel: SpotsViewModel
 
-    var freeSpotsCount: Int {
-        spots.filter { $0.status == .free }.count
-    }
-
-    var occupiedSpotsCount: Int {
-        spots.filter { $0.status == .occupied }.count
-    }
+    private let drones = MockData.drones
+    private let alerts = MockData.alerts
 
     var body: some View {
         NavigationStack {
@@ -44,19 +35,25 @@ struct DashboardView: View {
                         }
                         .padding(.horizontal)
 
-                    // Quick stats
+                    // Stats
                     HStack(spacing: 12) {
-                        StatCard(title: "Free Spots",
-                                 value: "\(freeSpotsCount)",
-                                 systemImage: "checkmark.circle")
+                        StatCard(
+                            title: "Free Spots",
+                            value: "\(spotsViewModel.freeSpotsCount)",
+                            systemImage: "checkmark.circle"
+                        )
 
-                        StatCard(title: "Occupied",
-                                 value: "\(occupiedSpotsCount)",
-                                 systemImage: "xmark.circle")
+                        StatCard(
+                            title: "Occupied",
+                            value: "\(spotsViewModel.occupiedSpotsCount)",
+                            systemImage: "xmark.circle"
+                        )
 
-                        StatCard(title: "Active Drones",
-                                 value: "\(drones.filter { $0.status == .patrolling }.count)",
-                                 systemImage: "airplane.circle.fill")
+                        StatCard(
+                            title: "Active Drones",
+                            value: "\(drones.filter { $0.status == .patrolling }.count)",
+                            systemImage: "airplane.circle.fill"
+                        )
                     }
                     .padding(.horizontal)
 
@@ -79,6 +76,18 @@ struct DashboardView: View {
                     .background(.thinMaterial)
                     .cornerRadius(16)
                     .padding(.horizontal)
+
+                    if spotsViewModel.isLoading {
+                        ProgressView("Refreshing data…")
+                            .padding(.top, 8)
+                    }
+
+                    if let error = spotsViewModel.errorMessage {
+                        Text(error)
+                            .foregroundColor(.red)
+                            .font(.footnote)
+                            .padding(.top, 4)
+                    }
                 }
                 .padding(.vertical, 8)
             }
@@ -112,4 +121,5 @@ struct StatCard: View {
 
 #Preview {
     DashboardView()
+        .environmentObject(SpotsViewModel())
 }

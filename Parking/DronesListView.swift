@@ -30,7 +30,7 @@ struct DronesListView: View {
 
                         ProgressView(value: drone.batteryLevel) {
                             Text("Battery")
-                                .font(.caption)
+                                .font(.caption2)
                         }
                         .progressViewStyle(.linear)
                         .frame(width: 90)
@@ -45,4 +45,3 @@ struct DronesListView: View {
 #Preview {
     DronesListView(drones: MockData.drones)
 }
-

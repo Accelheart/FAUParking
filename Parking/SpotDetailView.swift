@@ -23,14 +23,18 @@ struct SpotDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
 
-                // Header card
+                // Header
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Spot \(spot.name)")
                         .font(.largeTitle)
                         .bold()
 
-                    Text(spot.zone)
+                    Text(spot.lotName)
                         .font(.headline)
+                        .foregroundStyle(.secondary)
+
+                    Text("Category: \(spot.category.rawValue)")
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
 
                     HStack(spacing: 8) {
@@ -53,14 +57,14 @@ struct SpotDetailView: View {
                 .background(.thinMaterial)
                 .cornerRadius(16)
 
-                // Timeline / metadata
+                // Timing info
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Status Details")
                         .font(.headline)
 
                     HStack {
                         Image(systemName: "clock")
-                        Text("Last updated:")
+                        Text("Last updated")
                         Spacer()
                         Text(spot.lastUpdated, style: .time)
                             .font(.subheadline)
@@ -69,7 +73,7 @@ struct SpotDetailView: View {
 
                     HStack {
                         Image(systemName: "calendar")
-                        Text("Date:")
+                        Text("Date")
                         Spacer()
                         Text(spot.lastUpdated, style: .date)
                             .font(.subheadline)
@@ -80,18 +84,18 @@ struct SpotDetailView: View {
                 .background(Color(.secondarySystemBackground))
                 .cornerRadius(16)
 
-                // Placeholder for future extensions
+                // Future analytics placeholder
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Analytics (Future)")
                         .font(.headline)
 
-                    Text("Here you can later show:")
+                    Text("You could extend this screen to show:")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("• Occupancy duration")
-                        Text("• Confidence score from the model")
+                        Text("• Confidence score from model")
                         Text("• Historical status timeline")
                         Text("• Linked drone passes over this spot")
                     }
@@ -112,6 +116,15 @@ struct SpotDetailView: View {
 
 #Preview {
     NavigationStack {
-        SpotDetailView(spot: MockData.spots.first!)
+        SpotDetailView(
+            spot: ParkingSpot(
+                id: "1_1",
+                name: "1_1",
+                lotName: "lot_A",
+                category: .white,
+                status: .free,
+                lastUpdated: Date()
+            )
+        )
     }
 }

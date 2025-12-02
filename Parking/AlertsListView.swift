@@ -61,4 +61,3 @@ struct AlertRow: View {
 #Preview {
     AlertsListView(alerts: MockData.alerts)
 }
-
