@@ -15,76 +15,98 @@ project = rf.workspace("drone-parking-management-system").project("drone-parking
 model = project.version(3).model
 
 # Load Parking Data
+MASTER_IMAGE_PATH = "master_lot.JPG"
 PARKING_DATA_PATH = "parking_data.pkl"
-if os.path.exists(PARKING_DATA_PATH):
-    with open(PARKING_DATA_PATH, 'rb') as f:
-        parking_data = pickle.load(f)
-else:
-    print("Warning: parking_data.pkl not found! API will fail on requests.")
-    parking_data = []
+
+master_img = cv2.imread(MASTER_IMAGE_PATH)
+if master_img is None:
+    raise RuntimeError(f"Failed to load master image: {MASTER_IMAGE_PATH}")
+
+master_gray = cv2.cvtColor(master_img, cv2.COLOR_BGR2GRAY)
+
+orb = cv2.ORB_create(5000)
+kp_master, des_master = orb.detectAndCompute(master_gray, None)
+
+with open(PARKING_DATA_PATH, "rb") as f:
+    parking_data = pickle.load(f)
+
+
+def align_to_master(input_img):
+    gray1 = cv2.cvtColor(master_img, cv2.COLOR_BGR2GRAY)
+    gray2 = cv2.cvtColor(input_img, cv2.COLOR_BGR2GRAY)
+
+    orb = cv2.ORB_create(5000)
+    kp1, des1 = orb.detectAndCompute(gray1, None)
+    kp2, des2 = orb.detectAndCompute(gray2, None)
+
+    matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    matches = matcher.match(des1, des2)
+    matches = sorted(matches, key=lambda x: x.distance)[:200]
+
+    pts1 = np.float32([kp1[m.queryIdx].pt for m in matches])
+    pts2 = np.float32([kp2[m.trainIdx].pt for m in matches])
+
+    H, _ = cv2.findHomography(pts2, pts1, cv2.RANSAC)
+
+    aligned = cv2.warpPerspective(input_img, H,
+                                  (master_img.shape[1], master_img.shape[0]))
+
+    return aligned, H
+
 
 @app.post("/detect")
 async def detect_parking(file: UploadFile = File(...)):
-    #  Handle Input (Receive image from request) 
     contents = await file.read()
-    nparr = np.fromstring(contents, np.uint8)
+    nparr = np.frombuffer(contents, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-    temp_filename = "temp_upload.jpg"
-    cv2.imwrite(temp_filename, image)
+    if image is None:
+        return {"error": "Image decode failed"}
 
-    #  Run Inference 
-    # confidence=50 (0.50), overlap=30
-    response = model.predict(temp_filename, confidence=50, overlap=30).json()
-    predictions = response['predictions']
+    # Align to master
+    aligned_img, H = align_to_master(image)
 
-    # Convert predictions
+    # Save aligned image for Roboflow
+    cv2.imwrite("aligned.jpg", aligned_img)
+
+    # Run detection on aligned image
+    rf_pred = model.predict("aligned.jpg", confidence=40, overlap=30).json()
+    predictions = rf_pred["predictions"]
+
     boxes = []
-    for pred in predictions:
-        x, y, w, h = pred['x'], pred['y'], pred['width'], pred['height']
-        x1, x2 = int(x - w / 2), int(x + w / 2)
-        y1, y2 = int(y - h / 2), int(y + h / 2)
-        
-        # Filter logic
-        cx, cy = int(x), int(y)
-        is_valid = False
-        for spot in parking_data:
-            polygon = np.array(spot[0], np.int32)
-            if cv2.pointPolygonTest(polygon, (cx, cy), False) >= 0:
-                is_valid = True
-                break
-        
-        if is_valid:
-            boxes.append([x1, y1, x2, y2])
+    for p in predictions:
+        x, y, w, h = p["x"], p["y"], p["width"], p["height"]
+        x1, y1 = int(x - w/2), int(y - h/2)
+        x2, y2 = int(x + w/2), int(y + h/2)
+        boxes.append([x1, y1, x2, y2])
 
-    # Occupancy Logic 
-    occupied_spots = []
-    free_spots = []
+    occupied = []
+    free = []
+    vis = aligned_img.copy()
 
+    # Compare in MASTER coordinate space
     for spot in parking_data:
-        polygon_points = np.array(spot[0], np.int32)
+        polygon = np.array(spot[0], np.int32)
         spot_id = spot[1]
-        is_occupied = False
+        is_occ = False
 
         for box in boxes:
-            x1, y1, x2, y2 = box
-            cx, cy = int((x1 + x2) / 2), int((y1 + y2) / 2)
-            if cv2.pointPolygonTest(polygon_points, (cx, cy), False) >= 0:
-                is_occupied = True
+            cx = int((box[0]+box[2])/2)
+            cy = int((box[1]+box[3])/2)
+
+            if cv2.pointPolygonTest(polygon, (cx,cy), False) >= 0:
+                is_occ = True
                 break
 
-        if is_occupied:
-            occupied_spots.append(spot_id)
+        if is_occ:
+            occupied.append(spot_id)
         else:
-            free_spots.append(spot_id)
-
-    # Return JSON Response 
+            free.append(spot_id)
+    cv2.imwrite("debug_labeled.jpg", vis)
     return {
+        "occupied": occupied,
+        "free": free,
         "total_detected": len(boxes),
-        "occupied_count": len(occupied_spots),
-        "free_count": len(free_spots),
-        "occupied_spots": occupied_spots,
-        "free_spots": free_spots
+        "debug_image": "debug_labeled.jpg"
     }
-
-# To run this: uvicorn main:app --reload
+# To run this: python -m uvicorn main:app --reload
